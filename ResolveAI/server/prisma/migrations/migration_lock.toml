@@ -1,0 +1,2 @@
+# Generated database provider lock
+provider = "postgresql"

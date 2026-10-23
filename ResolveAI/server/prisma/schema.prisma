@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role { CUSTOMER AGENT ADMIN }
+enum TicketStatus { OPEN IN_PROGRESS RESOLVED CLOSED }
+enum Priority { LOW MEDIUM HIGH URGENT }
+enum Category { PAYMENT DELIVERY ACCOUNT PRODUCT OTHER }
+enum Sentiment { POSITIVE NEUTRAL NEGATIVE }
+enum DraftStatus { DRAFT APPROVED REJECTED }
+
+model Team {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  users     User[]
+  tickets   Ticket[]
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id           String       @id @default(uuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  role         Role         @default(CUSTOMER)
+  teamId       String?
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  ownedTickets Ticket[]     @relation("CustomerTickets")
+  assigned     Ticket[]     @relation("AssignedTickets")
+  messages     Message[]
+  approvals    AiDraft[]    @relation("DraftApprover")
+  auditEvents  AuditEvent[]
+  createdAt    DateTime     @default(now())
+}
+
+model Ticket {
+  id              String        @id @default(uuid())
+  title           String
+  description     String        @db.Text
+  status          TicketStatus  @default(OPEN)
+  priority        Priority      @default(MEDIUM)
+  category        Category      @default(OTHER)
+  customerId      String
+  customer        User          @relation("CustomerTickets", fields: [customerId], references: [id])
+  assignedAgentId String?
+  assignedAgent   User?         @relation("AssignedTickets", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  teamId          String?
+  team            Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  messages        Message[]
+  analyses        AiAnalysis[]
+  drafts          AiDraft[]
+  events          AuditEvent[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  resolvedAt      DateTime?
+  @@index([customerId, createdAt])
+  @@index([assignedAgentId, status])
+  @@index([status, priority])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  @@index([ticketId, createdAt])
+}
+
+model AiAnalysis {
+  id                String    @id @default(uuid())
+  ticketId          String
+  ticket            Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  category          Category
+  suggestedPriority Priority
+  sentiment         Sentiment
+  summary           String    @db.Text
+  reason            String    @db.Text
+  model             String
+  createdAt         DateTime  @default(now())
+  @@index([ticketId, createdAt])
+}
+
+model AiDraft {
+  id         String      @id @default(uuid())
+  ticketId   String
+  ticket     Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  body       String      @db.Text
+  status     DraftStatus @default(DRAFT)
+  approvedBy String?
+  approver   User?       @relation("DraftApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  @@index([ticketId, createdAt])
+}
+
+model AuditEvent {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actorId   String
+  actor     User     @relation(fields: [actorId], references: [id])
+  action    String
+  detail    String   @db.Text
+  createdAt DateTime @default(now())
+  @@index([ticketId, createdAt])
+}

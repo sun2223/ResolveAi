@@ -1,0 +1,21 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { authRouter } from './routes/auth';
+import { adminRouter } from './routes/admin';
+import { ticketRouter } from './routes/tickets';
+import { errorHandler, notFound } from './lib/errors';
+
+export const app = express();
+app.disable('x-powered-by');
+app.use(helmet());
+app.use(cors({ origin: (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(','), methods: ['GET','POST','PATCH','OPTIONS'] }));
+app.use(express.json({ limit: '32kb' }));
+app.use('/api/v1', rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false }));
+app.use('/api/v1/auth', rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: 'draft-7', legacyHeaders: false }), authRouter);
+app.get('/api/v1/health', (_req, res) => res.json({ ok: true }));
+app.use('/api/v1/admin', adminRouter);
+app.use('/api/v1/tickets', ticketRouter);
+app.use(notFound);
+app.use(errorHandler);
